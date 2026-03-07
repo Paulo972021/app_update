@@ -113,3 +113,10 @@ Use o script `deploy_mobile.bat` (na raiz) para:
 2. Publicar update (EAS Update)
 3. Gerar novo APK (EAS Build)
 4. Mostrar status do git
+5. Stage seguro + status (inclui `git add -A` e remove ruído comum de `.expo/`, `dist/` e `node_modules/` antes do commit)
+
+### Situação comum: mudanças não staged + untracked temporários
+
+Se o `git status` mostrar muitos arquivos temporários (ex.: `.expo/`, `dist/`, `node_modules/`) junto com alterações reais, use a opção **5** do script antes de publicar.
+
+Esse fluxo evita o erro "no changes added to commit" por falta de stage e reduz chance de commitar artefatos temporários.
