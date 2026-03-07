@@ -113,7 +113,7 @@ Use o script `deploy_mobile.bat` (na raiz) para:
 2. Publicar update (EAS Update)
 3. Gerar novo APK (EAS Build)
 4. Mostrar status do git
-5. Stage seguro + status (faz stage de arquivos rastreados + novos arquivos úteis, ignorando ruído comum de `.expo/`, `dist/` e `node_modules/`)
+5. Stage seguro + status (faz `git add .` e remove do stage apenas o ruído comum de `.expo/`, `dist/` e `node_modules/`)
 
 ### Situação comum: mudanças não staged + untracked temporários
 

@@ -141,17 +141,13 @@ echo.
 exit /b 0
 
 :stage_safe_quiet
-REM 1) Stage de arquivos rastreados (modificados/deletados)
-git add -u
+REM 1) Stage amplo (rastreado + novos arquivos)
+git add .
 
-REM 2) Stage de arquivos novos uteis (exceto ruido comum)
-for /f "delims=" %%f in ('git ls-files --others --exclude-standard') do (
-  set "SKIP="
-  for %%p in (%EXCLUDE_PATHS%) do (
-    echo(%%f| findstr /b /c:"%%p/" >nul && set "SKIP=1"
-    if /i "%%f"=="%%p" set "SKIP=1"
-  )
-  if not defined SKIP git add -- "%%f"
+REM 2) Remove do stage somente ruido comum
+for %%p in (%EXCLUDE_PATHS%) do (
+  git restore --staged -- "%%p" 1>nul 2>nul
+  if errorlevel 1 git reset -- "%%p" 1>nul 2>nul
 )
 
 exit /b 0
