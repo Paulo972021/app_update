@@ -1,11 +1,27 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0english-exercises-mobile"
 
+set "SCRIPT_DIR=%~dp0"
+set "APP_DIR="
+
+if exist "%SCRIPT_DIR%english-exercises-mobile\app.json" (
+  set "APP_DIR=%SCRIPT_DIR%english-exercises-mobile"
+) else (
+  set "APP_DIR=%SCRIPT_DIR%"
+)
+
+cd /d "%APP_DIR%"
 if errorlevel 1 (
   echo.
-  echo [ERRO] Pasta "english-exercises-mobile" nao encontrada ao lado deste script.
-  echo Verifique a estrutura e tente novamente.
+  echo [ERRO] Nao foi possivel acessar a pasta do app.
+  pause
+  exit /b 1
+)
+
+if not exist "app.json" (
+  echo.
+  echo [ERRO] app.json nao encontrado em "%CD%".
+  echo Coloque o script na raiz do app ou ao lado da pasta english-exercises-mobile.
   pause
   exit /b 1
 )
@@ -17,6 +33,8 @@ cls
 echo ==============================
 echo   MOBILE DEPLOY MENU
 echo ==============================
+echo Projeto atual: %CD%
+echo.
 echo 1 - Validar projeto
 echo 2 - Publicar update (EAS Update)
 echo 3 - Gerar novo APK (EAS Build)
@@ -82,17 +100,15 @@ goto menu
 
 :stage_safe
 echo.
-echo Aplicando stage seguro (inclui mudancas e remove ruido comum)...
-git add -A
-for %%p in (%EXCLUDE_PATHS%) do (
-  git reset -- "%%p" 1>nul 2>nul
-)
+echo Aplicando stage seguro...
+call :stage_safe_quiet
 
 echo.
 echo Status apos stage seguro:
 git status
 echo.
-echo Dica: para evitar ruido recorrente, garanta que .expo/, dist/ e node_modules/ estejam no .gitignore.
+echo Ignorados no stage automatico: .expo/, dist/, node_modules/
+echo Dica: mantenha esses caminhos no .gitignore para reduzir ruido.
 pause
 goto menu
 
@@ -125,10 +141,19 @@ echo.
 exit /b 0
 
 :stage_safe_quiet
-git add -A
-for %%p in (%EXCLUDE_PATHS%) do (
-  git reset -- "%%p" 1>nul 2>nul
+REM 1) Stage de arquivos rastreados (modificados/deletados)
+git add -u
+
+REM 2) Stage de arquivos novos uteis (exceto ruido comum)
+for /f "delims=" %%f in ('git ls-files --others --exclude-standard') do (
+  set "SKIP="
+  for %%p in (%EXCLUDE_PATHS%) do (
+    echo(%%f| findstr /b /c:"%%p/" >nul && set "SKIP=1"
+    if /i "%%f"=="%%p" set "SKIP=1"
+  )
+  if not defined SKIP git add -- "%%f"
 )
+
 exit /b 0
 
 :commit_changes
@@ -146,8 +171,8 @@ if "%USER_MSG%"=="" (
 git diff --cached --quiet
 if not errorlevel 1 (
   echo.
-  echo [AVISO] Nao ha mudancas staged apos limpeza de ruido (^.expo/dist/node_modules^).
-  echo Revise o git status e adicione arquivos necessarios antes de publicar.
+  echo [AVISO] Nao ha mudancas staged para commit.
+  echo Se houver arquivos novos, confira se estao fora de .expo/dist/node_modules.
   pause
   exit /b 1
 )
