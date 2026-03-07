@@ -89,7 +89,35 @@ if errorlevel 1 goto menu
 call :commit_changes "Prepare new Android build"
 if errorlevel 1 goto menu
 
-eas build -p android --profile preview --clear-cache
+set "BUILD_JSON_FILE=.eas_build_result.json"
+if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
+
+echo.
+echo Iniciando EAS Build (Android)...
+eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%"
+if errorlevel 1 (
+  echo.
+  echo [ERRO] Falha ao iniciar build no EAS.
+  if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
+  pause
+  goto menu
+)
+
+set "BUILD_LINK="
+for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p='.eas_build_result.json';if(!fs.existsSync(p)){process.exit(0)};let raw=fs.readFileSync(p,'utf8').trim();if(!raw){process.exit(0)};let data=JSON.parse(raw);if(Array.isArray(data)) data=data[0]||{};const link=data.buildDetailsPageUrl||data.logsUrl||data.artifacts?.buildUrl||data.artifacts?.applicationArchiveUrl||'';if(link)console.log(link);"`) do set "BUILD_LINK=%%i"
+
+if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
+
+echo.
+if defined BUILD_LINK (
+  echo Build iniciado com sucesso.
+  echo Link da build: !BUILD_LINK!
+  echo QR para abrir o link: https://api.qrserver.com/v1/create-qr-code/?size=300x300^&data=!BUILD_LINK!
+) else (
+  echo Build iniciado, mas nao foi possivel extrair link automaticamente.
+  echo Rode: eas build:list -p android --limit 1
+)
+
 pause
 goto menu
 

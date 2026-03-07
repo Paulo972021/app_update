@@ -78,6 +78,19 @@ git commit -m "Prepare new Android build"
 eas build -p android --profile preview --clear-cache
 ```
 
+
+### Saída do build: link e QR
+
+Ao escolher **Gerar novo APK (EAS Build)** no `deploy_mobile.bat`, o script tenta extrair automaticamente o link da build e mostra:
+- link da build no EAS;
+- URL de QR Code para abrir esse link no celular.
+
+Se não conseguir extrair automaticamente, ele orienta usar:
+
+```bat
+eas build:list -p android --limit 1
+```
+
 ## Regras técnicas adicionais
 
 1. Não usar `npm audit fix --force` sem avaliação.
