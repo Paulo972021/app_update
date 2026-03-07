@@ -3,6 +3,7 @@ setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
 set "APP_DIR="
+set "LOG_FILE=%~dp0deploy_mobile.log"
 
 if exist "%SCRIPT_DIR%english-exercises-mobile\app.json" (
   set "APP_DIR=%SCRIPT_DIR%english-exercises-mobile"
@@ -29,18 +30,21 @@ if not exist "app.json" (
 set EXCLUDE_PATHS=.expo dist node_modules
 
 :menu
-cls
+echo.
 echo ==============================
 echo   MOBILE DEPLOY MENU
 echo ==============================
 echo Projeto atual: %CD%
+echo Log: %LOG_FILE%
 echo.
 echo 1 - Validar projeto
 echo 2 - Publicar update (EAS Update)
 echo 3 - Gerar novo APK (EAS Build)
 echo 4 - Ver status do git
 echo 5 - Stage seguro + status
-echo 6 - Sair
+echo 6 - Ver log (ultimas 120 linhas)
+echo 7 - Limpar log
+echo 8 - Sair
 echo ==============================
 set /p opt=Escolha uma opcao: 
 
@@ -49,27 +53,27 @@ if "%opt%"=="2" goto update
 if "%opt%"=="3" goto build
 if "%opt%"=="4" goto gitstatus
 if "%opt%"=="5" goto stage_safe
-if "%opt%"=="6" goto end
+if "%opt%"=="6" goto show_log
+if "%opt%"=="7" goto clear_log
+if "%opt%"=="8" goto end
 goto menu
 
 :validate
 echo.
 echo Validando app.json...
-node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
+call :run_and_log "Validar app.json" node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
+if errorlevel 1 goto menu
+
+echo.
+echo Rodando expo export...
+call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 (
-  echo.
-  echo [ERRO] app.json invalido. Corrija antes de continuar.
+  echo [ERRO] Falha no expo export. Publicacao bloqueada.
   pause
   goto menu
 )
 
-echo.
-echo Rodando expo export...
-npx expo export --platform android --platform ios
-if errorlevel 1 (
-  echo.
-  echo [ERRO] Falha no expo export. Publicacao bloqueada.
-)
+echo [OK] Validacao concluida.
 pause
 goto menu
 
@@ -79,7 +83,16 @@ if errorlevel 1 goto menu
 call :commit_changes "Update app logic/UI"
 if errorlevel 1 goto menu
 
-eas update --branch preview --message "%FINAL_MSG%"
+echo.
+echo Publicando update...
+call :run_and_log "EAS update" eas update --branch preview --message "%FINAL_MSG%"
+if errorlevel 1 (
+  echo [ERRO] Falha no EAS Update. Veja o log: %LOG_FILE%
+  pause
+  goto menu
+)
+
+echo [OK] Update publicado com sucesso.
 pause
 goto menu
 
@@ -94,14 +107,18 @@ if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
 
 echo.
 echo Iniciando EAS Build (Android)...
-eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%"
+echo [EXEC] eas build -p android --profile preview --clear-cache --json >> "%LOG_FILE%"
+echo ===== %date% %time% | EAS build (android preview) ===== >> "%LOG_FILE%"
+eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%" 2>> "%LOG_FILE%"
 if errorlevel 1 (
+  echo ----- exit code: %ERRORLEVEL% ----- >> "%LOG_FILE%"
   echo.
-  echo [ERRO] Falha ao iniciar build no EAS.
+  echo [ERRO] Falha ao iniciar build no EAS. Veja o log: %LOG_FILE%
   if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
   pause
   goto menu
 )
+echo ----- exit code: 0 ----- >> "%LOG_FILE%"
 
 set "BUILD_LINK="
 for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p='.eas_build_result.json';if(!fs.existsSync(p)){process.exit(0)};let raw=fs.readFileSync(p,'utf8').trim();if(!raw){process.exit(0)};let data=JSON.parse(raw);if(Array.isArray(data)) data=data[0]||{};const link=data.buildDetailsPageUrl||data.logsUrl||data.artifacts?.buildUrl||data.artifacts?.applicationArchiveUrl||'';if(link)console.log(link);"`) do set "BUILD_LINK=%%i"
@@ -110,11 +127,11 @@ if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
 
 echo.
 if defined BUILD_LINK (
-  echo Build iniciado com sucesso.
+  echo [OK] Build iniciado com sucesso.
   echo Link da build: !BUILD_LINK!
   echo QR para abrir o link: https://api.qrserver.com/v1/create-qr-code/?size=300x300^&data=!BUILD_LINK!
 ) else (
-  echo Build iniciado, mas nao foi possivel extrair link automaticamente.
+  echo [AVISO] Build iniciado, mas nao foi possivel extrair link automaticamente.
   echo Rode: eas build:list -p android --limit 1
 )
 
@@ -140,12 +157,29 @@ echo Dica: mantenha esses caminhos no .gitignore para reduzir ruido.
 pause
 goto menu
 
+:show_log
+echo.
+echo ===== ULTIMAS 120 LINHAS DO LOG =====
+if exist "%LOG_FILE%" (
+  powershell -NoProfile -Command "Get-Content -Path '%LOG_FILE%' -Tail 120"
+) else (
+  echo (log ainda nao criado)
+)
+echo ======================================
+pause
+goto menu
+
+:clear_log
+if exist "%LOG_FILE%" del /f /q "%LOG_FILE%" >nul 2>nul
+echo Log limpo.
+pause
+goto menu
+
 :preflight_or_cancel
 echo.
 echo Validando app.json...
-node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
+call :run_and_log "Validar app.json" node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
 if errorlevel 1 (
-  echo.
   echo [ERRO] app.json invalido. Corrija antes de continuar.
   pause
   exit /b 1
@@ -153,9 +187,8 @@ if errorlevel 1 (
 
 echo.
 echo Rodando expo export...
-npx expo export --platform android --platform ios
+call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 (
-  echo.
   echo [ERRO] Falha no expo export. Publicacao cancelada.
   pause
   exit /b 1
@@ -201,7 +234,7 @@ if not errorlevel 1 (
   exit /b 1
 )
 
-git commit -m "%FINAL_MSG%"
+call :run_and_log "Git commit" git commit -m "%FINAL_MSG%"
 if errorlevel 1 (
   echo.
   echo [ERRO] Falha ao criar commit. Publicacao cancelada.
@@ -209,6 +242,26 @@ if errorlevel 1 (
   exit /b 1
 )
 
+exit /b 0
+
+:run_and_log
+set "STEP=%~1"
+shift
+
+echo.
+echo [EXEC] %STEP%
+echo [EXEC] %* >> "%LOG_FILE%"
+echo ===== %date% %time% | %STEP% ===== >> "%LOG_FILE%"
+call %* >> "%LOG_FILE%" 2>&1
+set "CMD_RC=%ERRORLEVEL%"
+echo ----- exit code: %CMD_RC% ----- >> "%LOG_FILE%"
+if not "%CMD_RC%"=="0" (
+  echo [ERRO] %STEP% falhou (code %CMD_RC%).
+  echo Veja detalhes em: %LOG_FILE%
+  exit /b %CMD_RC%
+)
+
+echo [OK] %STEP%
 exit /b 0
 
 :end

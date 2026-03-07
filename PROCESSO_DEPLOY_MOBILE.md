@@ -127,6 +127,8 @@ Use o script `deploy_mobile.bat` (na raiz) para:
 3. Gerar novo APK (EAS Build)
 4. Mostrar status do git
 5. Stage seguro + status (faz `git add .` e remove do stage apenas o ruído comum de `.expo/`, `dist/` e `node_modules/`)
+6. Ver log (últimas linhas)
+7. Limpar log
 
 ### Situação comum: mudanças não staged + untracked temporários
 
@@ -142,3 +144,10 @@ O `deploy_mobile.bat` detecta automaticamente estes cenários:
 - script dentro da própria raiz do app (onde existe `app.json`).
 
 Assim, o mesmo script funciona nos dois formatos de organização.
+
+
+### Quando a mensagem "some" rápido
+
+O script agora **não limpa a tela automaticamente** e grava saída detalhada em `deploy_mobile.log` (na mesma pasta do `.bat`).
+
+Se um comando falhar rápido (`eas update`, `eas build`, `expo export`), use a opção **6 - Ver log** para ler os detalhes do erro.
