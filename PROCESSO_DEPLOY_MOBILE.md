@@ -179,3 +179,12 @@ abrir_deploy_mobile.bat
 ```
 
 Esse arquivo executa `cmd /k deploy_mobile.bat`, evitando fechamento automático da janela após erros ou término do script.
+
+
+### Diretório de execução e validação pré-export
+
+Os scripts foram ajustados para sempre executar comandos de `expo`/`eas` dentro de `%APP_DIR%` (raiz real do app), evitando falso erro de `package.json` ausente quando o comando roda no diretório pai.
+
+Antes de `expo export`, o fluxo valida explicitamente a presença de:
+- `app.json`
+- `package.json`

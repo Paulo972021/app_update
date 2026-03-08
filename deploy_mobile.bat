@@ -18,11 +18,8 @@ if errorlevel 1 (
   goto handle_error
 )
 
-if not exist "app.json" (
-  echo [ERRO] app.json nao encontrado em "%CD%" >> "%LOG_FILE%"
-  set "LAST_ERROR=1"
-  goto handle_error
-)
+call :ensure_project_files
+if errorlevel 1 goto handle_error
 
 set EXCLUDE_PATHS=.expo dist node_modules
 
@@ -31,7 +28,7 @@ echo.
 echo ==============================
 echo   MOBILE DEPLOY MENU
 echo ==============================
-echo Projeto atual: %CD%
+echo Projeto atual: %APP_DIR%
 echo Log: %LOG_FILE%
 echo.
 echo 1 - Validar projeto
@@ -57,12 +54,12 @@ goto menu
 
 :validate
 echo.
+call :ensure_project_files
+if errorlevel 1 goto handle_error
 call :run_and_log "Validar app.json" node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
 if errorlevel 1 goto handle_error
-
 call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 goto handle_error
-
 echo [OK] Validacao concluida.
 pause
 goto menu
@@ -70,13 +67,10 @@ goto menu
 :update
 call :preflight_or_cancel
 if errorlevel 1 goto handle_error
-
 call :commit_changes "Update app logic/UI"
 if errorlevel 1 goto handle_error
-
 call :run_and_log "EAS update" eas update --branch preview --message "%FINAL_MSG%"
 if errorlevel 1 goto handle_error
-
 echo [OK] Update publicado com sucesso.
 pause
 goto menu
@@ -84,26 +78,32 @@ goto menu
 :build
 call :preflight_or_cancel
 if errorlevel 1 goto handle_error
-
 call :commit_changes "Prepare new Android build"
 if errorlevel 1 goto handle_error
 
-set "BUILD_JSON_FILE=.eas_build_result.json"
+set "BUILD_JSON_FILE=%APP_DIR%\.eas_build_result.json"
 if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
 
 echo [EXEC] EAS build (android preview)
-echo [EXEC] eas build -p android --profile preview --clear-cache --json >> "%LOG_FILE%"
 echo ===== %date% %time% | EAS build (android preview) ===== >> "%LOG_FILE%"
+echo [RUN_DIR] %APP_DIR% >> "%LOG_FILE%"
+echo [EXEC] eas build -p android --profile preview --clear-cache --json >> "%LOG_FILE%"
+pushd "%APP_DIR%" >nul
 eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%" 2>> "%LOG_FILE%"
-if errorlevel 1 (
-  set "LAST_ERROR=%ERRORLEVEL%"
-  echo ----- exit code: !LAST_ERROR! ----- >> "%LOG_FILE%"
-  goto handle_error
-)
-echo ----- exit code: 0 ----- >> "%LOG_FILE%"
+set "LAST_ERROR=%ERRORLEVEL%"
+popd >nul
+echo ----- exit code: !LAST_ERROR! ----- >> "%LOG_FILE%"
+if not "%LAST_ERROR%"=="0" goto handle_error
 
 set "BUILD_LINK="
-for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p='.eas_build_result.json';if(!fs.existsSync(p)) process.exit(0);let raw=fs.readFileSync(p,'utf8').trim();if(!raw) process.exit(0);let data=JSON.parse(raw);if(Array.isArray(data)) data=data[0]||{};const link=data.artifacts?.applicationArchiveUrl||data.artifacts?.buildUrl||data.buildDetailsPageUrl||data.logsUrl||'';if(link) console.log(link);"`) do set "BUILD_LINK=%%i"
+for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p=process.argv[1];if(!fs.existsSync(p))process.exit(0);const raw=fs.readFileSync(p,'utf8').trim();if(!raw)process.exit(0);let data;try{data=JSON.parse(raw)}catch(e){const m=raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])\s*$/);if(!m)process.exit(0);data=JSON.parse(m[1]);}if(Array.isArray(data))data=data[0]||{};const link=data.artifacts?.applicationArchiveUrl||data.artifacts?.buildUrl||data.buildDetailsPageUrl||data.logsUrl||'';if(link)console.log(link);" "%BUILD_JSON_FILE%"`) do set "BUILD_LINK=%%i"
+
+if not defined BUILD_LINK (
+  echo [INFO] Tentando fallback: eas build:list --json --limit 1 >> "%LOG_FILE%"
+  pushd "%APP_DIR%" >nul
+  for /f "usebackq delims=" %%i in (`eas build:list -p android --limit 1 --json 2^>^> "%LOG_FILE%" ^| node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const a=JSON.parse(s);const d=Array.isArray(a)?(a[0]||{}):a;const link=d.artifacts?.applicationArchiveUrl||d.artifacts?.buildUrl||d.buildDetailsPageUrl||d.logsUrl||'';if(link)process.stdout.write(link);}catch(e){}});"`) do set "BUILD_LINK=%%i"
+  popd >nul
+)
 
 if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
 
@@ -122,16 +122,19 @@ pause
 goto menu
 
 :gitstatus
+pushd "%APP_DIR%" >nul
 git status
+popd >nul
 pause
 goto menu
 
 :stage_safe
 call :stage_safe_quiet
-
 echo.
 echo Status apos stage seguro:
+pushd "%APP_DIR%" >nul
 git status
+popd >nul
 echo.
 echo Ignorados no stage automatico: .expo/, dist/, node_modules/
 pause
@@ -155,31 +158,44 @@ echo Log limpo.
 pause
 goto menu
 
+:ensure_project_files
+if not exist "%APP_DIR%\app.json" (
+  echo [ERRO] app.json nao encontrado em "%APP_DIR%" >> "%LOG_FILE%"
+  set "LAST_ERROR=1"
+  exit /b 1
+)
+if not exist "%APP_DIR%\package.json" (
+  echo [ERRO] package.json nao encontrado em "%APP_DIR%" >> "%LOG_FILE%"
+  set "LAST_ERROR=1"
+  exit /b 1
+)
+exit /b 0
+
 :preflight_or_cancel
+call :ensure_project_files
+if errorlevel 1 exit /b 1
 call :run_and_log "Validar app.json" node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
 if errorlevel 1 exit /b 1
-
 call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 exit /b 1
-
 call :stage_safe_quiet
 call :run_and_log "Git status" git status
 if errorlevel 1 exit /b 1
-
 exit /b 0
 
 :stage_safe_quiet
+pushd "%APP_DIR%" >nul
 git add .
 for %%p in (%EXCLUDE_PATHS%) do (
   git restore --staged -- "%%p" 1>nul 2>nul
   if errorlevel 1 git reset -- "%%p" 1>nul 2>nul
 )
+popd >nul
 exit /b 0
 
 :commit_changes
 set "DEFAULT_MSG=%~1"
 set "FINAL_MSG="
-
 set /p USER_MSG=Mensagem do commit: 
 if "%USER_MSG%"=="" (
   set "FINAL_MSG=%DEFAULT_MSG%"
@@ -187,16 +203,18 @@ if "%USER_MSG%"=="" (
   set "FINAL_MSG=%USER_MSG%"
 )
 
+pushd "%APP_DIR%" >nul
 git diff --cached --quiet
 if not errorlevel 1 (
+  popd >nul
   echo [INFO] Git limpo (sem mudancas staged). Seguindo sem commit.
   echo ===== %date% %time% | Git commit (ignorado: sem mudancas staged) ===== >> "%LOG_FILE%"
   exit /b 0
 )
+popd >nul
 
 call :run_and_log "Git commit" git commit -m "%FINAL_MSG%"
 if errorlevel 1 exit /b 1
-
 exit /b 0
 
 :run_and_log
@@ -204,21 +222,24 @@ set "STEP_NAME=%~1"
 shift
 
 echo ===== %date% %time% | %STEP_NAME% ===== >> "%LOG_FILE%"
+echo [RUN_DIR] %APP_DIR% >> "%LOG_FILE%"
 echo [EXEC] %* >> "%LOG_FILE%"
 
+pushd "%APP_DIR%" >nul
 call %* >> "%LOG_FILE%" 2>&1
 set "CMD_ERR=%ERRORLEVEL%"
+popd >nul
 
 echo ----- exit code: %CMD_ERR% ----- >> "%LOG_FILE%"
-
 if not "%CMD_ERR%"=="0" (
+  set "LAST_ERROR=%CMD_ERR%"
   echo.
   echo [ERRO] %STEP_NAME% falhou.
   echo Veja o log: %LOG_FILE%
   exit /b %CMD_ERR%
 )
-
 exit /b 0
+
 :handle_error
 echo.
 echo ==============================

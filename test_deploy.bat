@@ -192,6 +192,13 @@ call :section "TESTE: expo export"
 call :reset_tmp_out
 pushd "%APP_DIR%" >nul
 
+if not exist "package.json" (
+  call :fail "package.json ausente no diretorio de execucao do expo export"
+  call :append_file "%TMP_OUT%"
+  popd >nul
+  exit /b 0
+)
+
 call :run_with_timeout "npx expo export --platform android --platform ios" 180 "%TMP_OUT%"
 if errorlevel 1 (
   call :fail "expo export falhou"
@@ -373,10 +380,11 @@ endlocal
   echo [void]$p.Start()
   echo Get-Content -LiteralPath "%TMP_IN%" ^| ForEach-Object { $p.StandardInput.WriteLine($_) }
   echo $p.StandardInput.Close()
-  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); Set-Content -LiteralPath "%RUN_OUT%" -Value ($out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
+  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"; Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
   echo $out = $p.StandardOutput.ReadToEnd()
   echo $err = $p.StandardError.ReadToEnd()
-  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($out + "`r`n" + $err) -Encoding UTF8
+  echo $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"
+  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
   echo $rc = $p.ExitCode
   echo Set-Location $wd
   echo exit $rc
@@ -408,10 +416,11 @@ if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
   echo $p = New-Object System.Diagnostics.Process
   echo $p.StartInfo = $psi
   echo [void]$p.Start()
-  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); Set-Content -LiteralPath "%RUN_OUT%" -Value ($out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
+  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"; Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
   echo $out = $p.StandardOutput.ReadToEnd()
   echo $err = $p.StandardError.ReadToEnd()
-  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($out + "`r`n" + $err) -Encoding UTF8
+  echo $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"
+  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
   echo $rc = $p.ExitCode
   echo Set-Location $wd
   echo exit $rc
