@@ -168,3 +168,14 @@ Se a publicação falhar rápido, o ponto principal é ler o erro em `deploy_mob
 Se o repositório estiver limpo (`nothing to commit, working tree clean`) ou sem mudanças staged após o stage seguro, o script **não aborta**.
 
 Ele apenas registra que o commit foi ignorado e segue normalmente para `eas update` ou `eas build`.
+
+
+### Janela não fechar automaticamente (Windows)
+
+Para abrir o deploy mantendo a janela do terminal aberta, use:
+
+```bat
+abrir_deploy_mobile.bat
+```
+
+Esse arquivo executa `cmd /k deploy_mobile.bat`, evitando fechamento automático da janela após erros ou término do script.
