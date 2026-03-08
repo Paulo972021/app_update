@@ -233,10 +233,10 @@ if "%USER_MSG%"=="" (
 git diff --cached --quiet
 if not errorlevel 1 (
   echo.
-  echo [AVISO] Nao ha mudancas staged para commit.
-  echo Se houver arquivos novos, confira se estao fora de .expo/dist/node_modules.
-  pause
-  exit /b 1
+  echo [INFO] Git limpo (sem mudancas staged). Seguindo sem commit.
+  echo [INFO] Commit ignorado por nao haver mudancas.
+  echo ===== %date% %time% | Git commit (ignorado: sem mudancas staged) ===== >> "%LOG_FILE%"
+  exit /b 0
 )
 
 call :run_and_log "Git commit" git commit -m "%FINAL_MSG%"

@@ -161,3 +161,10 @@ Esse status está **ok** para o fluxo:
 
 Isso, por si só, **não impede** `eas update` nem `eas build`.
 Se a publicação falhar rápido, o ponto principal é ler o erro em `deploy_mobile.log` (opção 6 no menu).
+
+
+### Git limpo (sem mudanças)
+
+Se o repositório estiver limpo (`nothing to commit, working tree clean`) ou sem mudanças staged após o stage seguro, o script **não aborta**.
+
+Ele apenas registra que o commit foi ignorado e segue normalmente para `eas update` ou `eas build`.
