@@ -99,48 +99,69 @@ pause
 goto menu
 
 :build
-call :preflight_or_cancel
-if errorlevel 1 goto menu
-call :commit_changes "Prepare new Android build"
-if errorlevel 1 goto menu
+echo.
+echo Validando app.json...
+node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
+if errorlevel 1 (
+  echo.
+  echo [ERRO] app.json invalido. Corrija antes de continuar.
+  pause
+  goto menu
+)
+
+echo.
+echo Rodando expo export...
+npx expo export --platform android --platform ios
+if errorlevel 1 (
+  echo.
+  echo [ERRO] Falha no expo export. Build cancelado.
+  pause
+  goto menu
+)
+
+echo.
+git status
+echo.
+set /p msg=Mensagem do build: 
+if "%msg%"=="" set msg=Prepare new Android build
+git add .
+git commit -m "%msg%"
+if errorlevel 1 (
+  echo.
+  echo [AVISO] Commit nao criado (talvez sem alteracoes). Prosseguindo para build.
+)
 
 set "BUILD_JSON_FILE=.eas_build_result.json"
 if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
 
 echo.
 echo Iniciando EAS Build (Android)...
-echo [EXEC] eas build -p android --profile preview --clear-cache --json >> "%LOG_FILE%"
-echo ===== %date% %time% | EAS build (android preview) ===== >> "%LOG_FILE%"
-eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%" 2>> "%LOG_FILE%"
+eas build -p android --profile preview --clear-cache --json > "%BUILD_JSON_FILE%"
 if errorlevel 1 (
-  echo ----- exit code: %ERRORLEVEL% ----- >> "%LOG_FILE%"
   echo.
-  echo [ERRO] Falha ao iniciar build no EAS. Veja o log: %LOG_FILE%
-  call :show_log_preview
-  if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
+  echo [ERRO] Falha ao iniciar build no EAS.
   pause
   goto menu
 )
-echo ----- exit code: 0 ----- >> "%LOG_FILE%"
 
 set "BUILD_LINK="
-for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p='.eas_build_result.json';if(!fs.existsSync(p)){process.exit(0)};let raw=fs.readFileSync(p,'utf8').trim();if(!raw){process.exit(0)};let data=JSON.parse(raw);if(Array.isArray(data)) data=data[0]||{};const link=data.buildDetailsPageUrl||data.logsUrl||data.artifacts?.buildUrl||data.artifacts?.applicationArchiveUrl||'';if(link)console.log(link);"`) do set "BUILD_LINK=%%i"
-
-if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
+for /f "usebackq delims=" %%i in (`node -e "const fs=require('fs');const p='.eas_build_result.json';if(!fs.existsSync(p)) process.exit(0);let raw=fs.readFileSync(p,'utf8').trim();if(!raw) process.exit(0);let data=JSON.parse(raw);if(Array.isArray(data)) data=data[0]||{};const link=data.artifacts?.applicationArchiveUrl||data.artifacts?.buildUrl||data.buildDetailsPageUrl||data.logsUrl||'';if(link) console.log(link);"`) do set "BUILD_LINK=%%i"
 
 echo.
 if defined BUILD_LINK (
-  echo [OK] Build iniciado com sucesso.
+  echo [OK] Build enviado ao EAS com sucesso.
   echo Link da build: !BUILD_LINK!
-  echo QR para abrir o link: https://api.qrserver.com/v1/create-qr-code/?size=300x300^&data=!BUILD_LINK!
+  echo.
+  echo QR para abrir o link:
+  echo https://api.qrserver.com/v1/create-qr-code/?size=300x300^&data=!BUILD_LINK!
 ) else (
-  echo [AVISO] Build iniciado, mas nao foi possivel extrair link automaticamente.
-  echo Rode: eas build:list -p android --limit 1
+  echo [AVISO] Build executado, mas nao foi possivel extrair link automaticamente.
+  echo Rode manualmente:
+  echo eas build:list -p android --limit 1
 )
 
 pause
 goto menu
-
 :gitstatus
 git status
 pause
