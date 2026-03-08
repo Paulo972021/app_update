@@ -69,6 +69,7 @@ echo Rodando expo export...
 call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 (
   echo [ERRO] Falha no expo export. Publicacao bloqueada.
+  call :show_log_preview
   pause
   goto menu
 )
@@ -88,6 +89,7 @@ echo Publicando update...
 call :run_and_log "EAS update" eas update --branch preview --message "%FINAL_MSG%"
 if errorlevel 1 (
   echo [ERRO] Falha no EAS Update. Veja o log: %LOG_FILE%
+  call :show_log_preview
   pause
   goto menu
 )
@@ -114,6 +116,7 @@ if errorlevel 1 (
   echo ----- exit code: %ERRORLEVEL% ----- >> "%LOG_FILE%"
   echo.
   echo [ERRO] Falha ao iniciar build no EAS. Veja o log: %LOG_FILE%
+  call :show_log_preview
   if exist "%BUILD_JSON_FILE%" del /f /q "%BUILD_JSON_FILE%" >nul 2>nul
   pause
   goto menu
@@ -181,6 +184,7 @@ echo Validando app.json...
 call :run_and_log "Validar app.json" node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"
 if errorlevel 1 (
   echo [ERRO] app.json invalido. Corrija antes de continuar.
+  call :show_log_preview
   pause
   exit /b 1
 )
@@ -190,6 +194,7 @@ echo Rodando expo export...
 call :run_and_log "Expo export (android+ios)" npx expo export --platform android --platform ios
 if errorlevel 1 (
   echo [ERRO] Falha no expo export. Publicacao cancelada.
+  call :show_log_preview
   pause
   exit /b 1
 )
@@ -238,6 +243,7 @@ call :run_and_log "Git commit" git commit -m "%FINAL_MSG%"
 if errorlevel 1 (
   echo.
   echo [ERRO] Falha ao criar commit. Publicacao cancelada.
+  call :show_log_preview
   pause
   exit /b 1
 )
@@ -247,13 +253,22 @@ exit /b 0
 :run_and_log
 set "STEP=%~1"
 shift
+set "TMP_OUT=%TEMP%\deploy_mobile_cmd_output_%RANDOM%_%RANDOM%.log"
 
 echo.
 echo [EXEC] %STEP%
 echo [EXEC] %* >> "%LOG_FILE%"
 echo ===== %date% %time% | %STEP% ===== >> "%LOG_FILE%"
-call %* >> "%LOG_FILE%" 2>&1
+
+call %* > "%TMP_OUT%" 2>&1
 set "CMD_RC=%ERRORLEVEL%"
+
+if exist "%TMP_OUT%" (
+  type "%TMP_OUT%"
+  type "%TMP_OUT%" >> "%LOG_FILE%"
+  del /f /q "%TMP_OUT%" >nul 2>nul
+)
+
 echo ----- exit code: %CMD_RC% ----- >> "%LOG_FILE%"
 if not "%CMD_RC%"=="0" (
   echo [ERRO] %STEP% falhou (code %CMD_RC%).
@@ -262,6 +277,17 @@ if not "%CMD_RC%"=="0" (
 )
 
 echo [OK] %STEP%
+exit /b 0
+
+:show_log_preview
+echo.
+echo ===== RESUMO DO ERRO (ultimas 60 linhas) =====
+if exist "%LOG_FILE%" (
+  powershell -NoProfile -Command "Get-Content -Path '%LOG_FILE%' -Tail 60"
+) else (
+  echo (log ainda nao criado)
+)
+echo ===============================================
 exit /b 0
 
 :end

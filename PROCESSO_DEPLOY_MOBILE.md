@@ -151,3 +151,13 @@ Assim, o mesmo script funciona nos dois formatos de organização.
 O script agora **não limpa a tela automaticamente** e grava saída detalhada em `deploy_mobile.log` (na mesma pasta do `.bat`).
 
 Se um comando falhar rápido (`eas update`, `eas build`, `expo export`), use a opção **6 - Ver log** para ler os detalhes do erro.
+
+
+### Sobre o `git status` que você enviou
+
+Esse status está **ok** para o fluxo:
+- arquivos de código/config aparecem em **Changes to be committed**;
+- `.expo/`, `dist/`, `node_modules/` ficam como **Untracked files** (ruído temporário).
+
+Isso, por si só, **não impede** `eas update` nem `eas build`.
+Se a publicação falhar rápido, o ponto principal é ler o erro em `deploy_mobile.log` (opção 6 no menu).
