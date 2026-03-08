@@ -188,3 +188,14 @@ Os scripts foram ajustados para sempre executar comandos de `expo`/`eas` dentro 
 Antes de `expo export`, o fluxo valida explicitamente a presença de:
 - `app.json`
 - `package.json`
+
+
+### Alinhamento do testador (`test_deploy.bat`)
+
+O testador foi alinhado ao menu atual do `deploy_mobile.bat` (1..8), incluindo validação de:
+- opção 1 (validar projeto);
+- opção 2 (update);
+- opção 3 (build com link/QR/fallback);
+- análise estática de labels e chaves atuais do deploy.
+
+Também registra no relatório o diretório real de execução do `expo export` e usa `%APP_DIR%` para comandos Expo/EAS.
