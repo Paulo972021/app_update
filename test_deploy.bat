@@ -26,6 +26,10 @@ if exist "%REPORT_FILE%" del /f /q "%REPORT_FILE%" >nul 2>nul
 if exist "%TMP_OUT%" del /f /q "%TMP_OUT%" >nul 2>nul
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
+setlocal DisableDelayedExpansion
+powershell -NoProfile -Command "Remove-Item -LiteralPath '%SCRIPT_DIR%!LOG_FILE!' -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '%SCRIPT_DIR%]' -Force -ErrorAction SilentlyContinue" >nul 2>nul
+endlocal
+
 call :write_line "==============================================="
 call :write_line "TESTE DEPLOY MOBILE"
 call :write_line "Data/Hora: %date% %time%"
@@ -301,34 +305,45 @@ set "RUN_TIMEOUT=%~2"
 set "RUN_OUT=%~3"
 set "RUN_ERR=0"
 set "RUN_CLASS="
+set "LAST_PS_CMD=cmd.exe /c deploy_mobile.bat"
 if exist "%RUN_OUT%" del /f /q "%RUN_OUT%" >nul 2>nul
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
 > "%TMP_PS1%" (
+  echo $ErrorActionPreference = 'Stop'
   echo $wd = Get-Location
   echo Set-Location -LiteralPath "%SCRIPT_DIR%"
   echo $inputs = "%RUN_INPUT%" -split ';'
-  echo $psi = New-Object System.Diagnostics.ProcessStartInfo
-  echo $psi.FileName = "cmd.exe"
-  echo $psi.Arguments = "/c deploy_mobile.bat"
-  echo $psi.RedirectStandardInput = $true
-  echo $psi.RedirectStandardOutput = $true
-  echo $psi.RedirectStandardError = $true
-  echo $psi.UseShellExecute = $false
-  echo $psi.CreateNoWindow = $true
-  echo $p = New-Object System.Diagnostics.Process
-  echo $p.StartInfo = $psi
-  echo [void]$p.Start()
-  echo foreach ($line in $inputs) { $p.StandardInput.WriteLine($line) }
-  echo $p.StandardInput.Close()
-  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"; Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
-  echo $out = $p.StandardOutput.ReadToEnd()
-  echo $err = $p.StandardError.ReadToEnd()
-  echo $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"
-  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
-  echo $rc = $p.ExitCode
-  echo Set-Location $wd
-  echo exit $rc
+  echo $cmdLine = 'cmd.exe /c deploy_mobile.bat'
+  echo try {
+  echo   $psi = New-Object System.Diagnostics.ProcessStartInfo
+  echo   $psi.FileName = 'cmd.exe'
+  echo   $psi.Arguments = '/c deploy_mobile.bat'
+  echo   $psi.RedirectStandardInput = $true
+  echo   $psi.RedirectStandardOutput = $true
+  echo   $psi.RedirectStandardError = $true
+  echo   $psi.UseShellExecute = $false
+  echo   $psi.CreateNoWindow = $true
+  echo   $p = New-Object System.Diagnostics.Process
+  echo   $p.StartInfo = $psi
+  echo   [void]$p.Start()
+  echo   foreach ($line in $inputs) { $p.StandardInput.WriteLine($line) }
+  echo   $p.StandardInput.Close()
+  echo   $finished = $p.WaitForExit(%RUN_TIMEOUT%000)
+  echo   if (-not $finished) { try { $p.Kill() } catch {} }
+  echo   $out = $p.StandardOutput.ReadToEnd()
+  echo   $err = $p.StandardError.ReadToEnd()
+  echo   $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n[PS_CMD] " + $cmdLine + "`r`n"
+  echo   Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
+  echo   if (-not $finished) { Set-Location $wd; exit 124 }
+  echo   Set-Location $wd
+  echo   exit $p.ExitCode
+  echo } catch {
+  echo   $msg = "[RUN_DIR] " + (Get-Location).Path + "`r`n[PS_CMD] " + $cmdLine + "`r`n[PS_EXCEPTION] " + $_.Exception.Message + "`r`n"
+  echo   Set-Content -LiteralPath "%RUN_OUT%" -Value $msg -Encoding UTF8
+  echo   Set-Location $wd
+  echo   exit 197
+  echo }
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
@@ -343,30 +358,41 @@ set "RUN_TIMEOUT=%~2"
 set "RUN_OUT=%~3"
 set "RUN_ERR=0"
 set "RUN_CLASS="
+set "LAST_PS_CMD=cmd.exe /c %RUN_CMD%"
 if exist "%RUN_OUT%" del /f /q "%RUN_OUT%" >nul 2>nul
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
 > "%TMP_PS1%" (
+  echo $ErrorActionPreference = 'Stop'
   echo $wd = Get-Location
   echo Set-Location -LiteralPath "%APP_DIR%"
-  echo $psi = New-Object System.Diagnostics.ProcessStartInfo
-  echo $psi.FileName = "cmd.exe"
-  echo $psi.Arguments = "/c %RUN_CMD%"
-  echo $psi.RedirectStandardOutput = $true
-  echo $psi.RedirectStandardError = $true
-  echo $psi.UseShellExecute = $false
-  echo $psi.CreateNoWindow = $true
-  echo $p = New-Object System.Diagnostics.Process
-  echo $p.StartInfo = $psi
-  echo [void]$p.Start()
-  echo if (-not $p.WaitForExit(%RUN_TIMEOUT%000)) { try { $p.Kill() } catch {} ; $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"; Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8; Set-Location $wd; exit 124 }
-  echo $out = $p.StandardOutput.ReadToEnd()
-  echo $err = $p.StandardError.ReadToEnd()
-  echo $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n"
-  echo Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
-  echo $rc = $p.ExitCode
-  echo Set-Location $wd
-  echo exit $rc
+  echo $cmdLine = 'cmd.exe /c %RUN_CMD%'
+  echo try {
+  echo   $psi = New-Object System.Diagnostics.ProcessStartInfo
+  echo   $psi.FileName = 'cmd.exe'
+  echo   $psi.Arguments = "/c %RUN_CMD%"
+  echo   $psi.RedirectStandardOutput = $true
+  echo   $psi.RedirectStandardError = $true
+  echo   $psi.UseShellExecute = $false
+  echo   $psi.CreateNoWindow = $true
+  echo   $p = New-Object System.Diagnostics.Process
+  echo   $p.StartInfo = $psi
+  echo   [void]$p.Start()
+  echo   $finished = $p.WaitForExit(%RUN_TIMEOUT%000)
+  echo   if (-not $finished) { try { $p.Kill() } catch {} }
+  echo   $out = $p.StandardOutput.ReadToEnd()
+  echo   $err = $p.StandardError.ReadToEnd()
+  echo   $prefix = "[RUN_DIR] " + (Get-Location).Path + "`r`n[PS_CMD] " + $cmdLine + "`r`n"
+  echo   Set-Content -LiteralPath "%RUN_OUT%" -Value ($prefix + $out + "`r`n" + $err) -Encoding UTF8
+  echo   if (-not $finished) { Set-Location $wd; exit 124 }
+  echo   Set-Location $wd
+  echo   exit $p.ExitCode
+  echo } catch {
+  echo   $msg = "[RUN_DIR] " + (Get-Location).Path + "`r`n[PS_CMD] " + $cmdLine + "`r`n[PS_EXCEPTION] " + $_.Exception.Message + "`r`n"
+  echo   Set-Content -LiteralPath "%RUN_OUT%" -Value $msg -Encoding UTF8
+  echo   Set-Location $wd
+  echo   exit 197
+  echo }
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
@@ -380,12 +406,19 @@ set "CR_OUT=%~1"
 set "CR_ERR=%~2"
 set "RUN_CLASS="
 if "%CR_ERR%"=="124" (set "RUN_CLASS=timeout" & exit /b 0)
+if "%CR_ERR%"=="197" (set "RUN_CLASS=excecao powershell" & exit /b 0)
 if "%CR_ERR%"=="0" (set "RUN_CLASS=sucesso" & exit /b 0)
 if exist "%CR_OUT%" (
+  for %%Z in ("%CR_OUT%") do set "FS=%%~zZ"
+  if "!FS!"=="0" (
+    set "RUN_CLASS=output vazio"
+    exit /b 0
+  )
+  findstr /i "[PS_EXCEPTION]" "%CR_OUT%" >nul 2>nul
+  if not errorlevel 1 (set "RUN_CLASS=excecao powershell" & exit /b 0)
   findstr /i "[ERRO]" "%CR_OUT%" >nul 2>nul
   if not errorlevel 1 (set "RUN_CLASS=erro tratado" & exit /b 0)
-  for %%Z in ("%CR_OUT%") do set "FS=%%~zZ"
-  if "!FS!"=="0" (set "RUN_CLASS=output vazio") else (set "RUN_CLASS=crash/erro nao tratado")
+  set "RUN_CLASS=crash/erro nao tratado"
 ) else (
   set "RUN_CLASS=output vazio"
 )
@@ -395,11 +428,16 @@ exit /b 0
 call :write_line "[FORENSE] Contexto da falha: %~1"
 call :write_line "Diretorio de execucao: %~3"
 call :write_line "Comando executado: %~2"
+if defined LAST_PS_CMD call :write_line "Comando PowerShell: %LAST_PS_CMD%"
 call :write_line "Exit code: %~4"
 if defined RUN_CLASS call :write_line "Classificacao: %RUN_CLASS%"
-if exist "%~5" call :append_file "%~5"
+if exist "%~5" (
+  for %%Z in ("%~5") do call :write_line "Arquivo de output: %~5 (%%~zZ bytes)"
+  call :append_file "%~5"
+) else (
+  call :write_line "Arquivo de output: NAO CRIADO"
+)
 exit /b 0
-
 :section
 set "SEC=%~1"
 echo.

@@ -207,3 +207,6 @@ O `test_deploy.bat` foi ajustado para depuração forense em falhas dinâmicas:
 - sempre anexa saída capturada em falhas de `expo export`, menu, opção 1, opção 2 e opção 3;
 - registra diretório, comando e exit code no relatório;
 - classifica falhas em `timeout`, `erro tratado`, `crash/erro nao tratado` ou `output vazio`.
+
+
+O modo forense também registra metadados do runner PowerShell (`[PS_CMD]` e `[PS_EXCEPTION]`) e informa se o arquivo temporário de output foi criado e com qual tamanho.
