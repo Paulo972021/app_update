@@ -19,6 +19,8 @@ if exist "%SCRIPT_DIR%english-exercises-mobile\app.json" (
 set /a PASS_COUNT=0
 set /a FAIL_COUNT=0
 set /a WARN_COUNT=0
+set "RUN_ERR=0"
+set "RUN_CLASS="
 
 if exist "%REPORT_FILE%" del /f /q "%REPORT_FILE%" >nul 2>nul
 if exist "%TMP_OUT%" del /f /q "%TMP_OUT%" >nul 2>nul
@@ -48,7 +50,6 @@ echo 4 - Limpar relatorio
 echo 5 - Sair
 echo ===============================================
 set /p opt=Escolha uma opcao: 
-
 if "%opt%"=="1" goto quick
 if "%opt%"=="2" goto full
 if "%opt%"=="3" goto show_report
@@ -113,29 +114,34 @@ call :section "TESTE: app.json"
 call :reset_tmp_out
 pushd "%APP_DIR%" >nul
 node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')" > "%TMP_OUT%" 2>&1
-if errorlevel 1 (call :fail "app.json invalido") else (call :pass "app.json valido")
+set "RC=%ERRORLEVEL%"
 popd >nul
+if "%RC%"=="0" (
+  call :pass "app.json valido"
+) else (
+  call :fail "app.json invalido"
+  call :record_failure_context "app.json" "node -e JSON.parse(...)" "%APP_DIR%" "%RC%" "%TMP_OUT%"
+)
 call :append_file "%TMP_OUT%"
 exit /b 0
 
 :test_expo_export
 call :section "TESTE: expo export"
 call :reset_tmp_out
-pushd "%APP_DIR%" >nul
-if not exist "package.json" (
+if not exist "%APP_DIR%\package.json" (
   call :fail "package.json ausente no diretorio de execucao do expo export"
-  popd >nul
+  call :record_failure_context "expo export" "npx expo export --platform android --platform ios" "%APP_DIR%" "1" "%TMP_OUT%"
   call :append_file "%TMP_OUT%"
   exit /b 0
 )
-popd >nul
 call :write_line "Diretorio de execucao: %APP_DIR%"
 call :write_line "Comando: npx expo export --platform android --platform ios"
 call :run_with_timeout "npx expo export --platform android --platform ios" 180 "%TMP_OUT%"
-if errorlevel 1 (
-  call :fail "expo export falhou"
+if "%RUN_ERR%"=="0" (
+  if exist "%APP_DIR%\dist" (call :pass "expo export OK e pasta dist gerada") else (call :warn "expo export sem erro, mas dist nao encontrada")
 ) else (
-  if exist "%APP_DIR%\dist" (call :pass "expo export OK e pasta dist gerada") else (call :warn "expo export terminou sem erro, mas dist nao foi encontrada")
+  call :fail "expo export falhou"
+  call :record_failure_context "expo export" "npx expo export --platform android --platform ios" "%APP_DIR%" "%RUN_ERR%" "%TMP_OUT%"
 )
 call :append_file "%TMP_OUT%"
 exit /b 0
@@ -145,8 +151,9 @@ call :section "TESTE: git status"
 call :reset_tmp_out
 pushd "%APP_DIR%" >nul
 git status > "%TMP_OUT%" 2>&1
-if errorlevel 1 (call :warn "git status falhou") else (call :pass "git status executado")
+set "RC=%ERRORLEVEL%"
 popd >nul
+if "%RC%"=="0" (call :pass "git status executado") else (call :warn "git status falhou")
 call :append_file "%TMP_OUT%"
 exit /b 0
 
@@ -173,7 +180,7 @@ findstr /i ":show_log_preview" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "Label :
 findstr /i "BUILD_JSON_FILE" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "BUILD_JSON_FILE encontrado") || (call :fail "BUILD_JSON_FILE ausente")
 findstr /i "applicationArchiveUrl" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "Parser de applicationArchiveUrl encontrado") || (call :warn "Parser de applicationArchiveUrl ausente")
 findstr /i "qrserver.com" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "URL de QR encontrada") || (call :warn "URL de QR ausente")
-findstr /i "eas build:list -p android --limit 1" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "Fallback de build:list encontrado") || (call :warn "Fallback de build:list ausente")
+findstr /i "eas build:list -p android --limit 1" "%DEPLOY_BAT%" >nul 2>nul && (call :pass "Fallback build:list encontrado") || (call :warn "Fallback build:list ausente")
 exit /b 0
 
 :test_deploy_menu
@@ -184,61 +191,74 @@ if not exist "%DEPLOY_BAT%" (
   exit /b 0
 )
 call :run_deploy_input "8" 20 "%TMP_OUT%"
-if errorlevel 1 (call :fail "deploy_mobile.bat nao respondeu corretamente ao menu/sair") else (call :pass "deploy_mobile.bat abriu e respondeu ao menu")
+if "%RUN_ERR%"=="0" (
+  call :pass "deploy abriu e saiu pelo menu"
+) else (
+  call :fail "deploy nao respondeu ao menu/sair"
+  call :record_failure_context "menu" "deploy_mobile.bat (input: 8)" "%SCRIPT_DIR%" "%RUN_ERR%" "%TMP_OUT%"
+)
 call :append_file "%TMP_OUT%"
 exit /b 0
 
 :test_deploy_validate_option
-call :section "TESTE: opcao 1 do deploy (validacao)"
+call :section "TESTE: opcao 1 do deploy"
 call :reset_tmp_out
 if not exist "%DEPLOY_BAT%" (
-  call :fail "Nao foi possivel testar validacao: deploy_mobile.bat ausente"
+  call :fail "Nao foi possivel testar opcao 1: deploy ausente"
   exit /b 0
 )
 call :run_deploy_input "1; ;8" 240 "%TMP_OUT%"
-if errorlevel 1 (
-  call :fail "Opcao 1 do deploy falhou"
+if not "%RUN_ERR%"=="0" (
+  call :fail "Opcao 1 falhou"
+  call :record_failure_context "opcao 1" "deploy_mobile.bat (input: 1; ;8)" "%SCRIPT_DIR%" "%RUN_ERR%" "%TMP_OUT%"
 ) else (
   set "V1="
   findstr /i "app.json OK" "%TMP_OUT%" >nul 2>nul && set "V1=1"
   findstr /i "Validacao concluida" "%TMP_OUT%" >nul 2>nul && set "V1=1"
   findstr /i "Exported: dist" "%TMP_OUT%" >nul 2>nul && set "V1=1"
-  if defined V1 (call :pass "Opcao 1 executada com sinais de validacao correta") else (call :warn "Opcao 1 executou, mas sem sinais esperados")
+  if defined V1 (call :pass "Opcao 1 com sinais esperados") else (call :warn "Opcao 1 sem sinais esperados")
 )
 call :append_file "%TMP_OUT%"
 exit /b 0
 
 :test_deploy_update_option
-call :section "TESTE: opcao 2 do deploy (update)"
+call :section "TESTE: opcao 2 do deploy"
 call :reset_tmp_out
 if not exist "%DEPLOY_BAT%" (
-  call :fail "Nao foi possivel testar update: deploy_mobile.bat ausente"
+  call :fail "Nao foi possivel testar opcao 2: deploy ausente"
   exit /b 0
 )
 call :run_deploy_input "2;teste-update-auto; ;8" 480 "%TMP_OUT%"
-if errorlevel 1 (
-  findstr /i "[ERRO]" "%TMP_OUT%" >nul 2>nul
-  if errorlevel 1 (call :fail "Opcao 2 falhou sem mensagem clara") else (call :warn "Opcao 2 retornou erro tratado")
-) else (
+if "%RUN_ERR%"=="0" (
   findstr /i "Update publicado com sucesso" "%TMP_OUT%" >nul 2>nul
-  if errorlevel 1 (call :warn "Opcao 2 concluiu sem mensagem final explicita") else (call :pass "Opcao 2 executada com sucesso")
+  if errorlevel 1 (call :warn "Opcao 2 concluida sem mensagem final explicita") else (call :pass "Opcao 2 executada com sucesso")
+) else (
+  if /i "%RUN_CLASS%"=="erro tratado" (
+    call :warn "Opcao 2 retornou erro tratado"
+  ) else (
+    call :fail "Opcao 2 falhou"
+    call :record_failure_context "opcao 2" "deploy_mobile.bat (input: 2;teste-update-auto; ;8)" "%SCRIPT_DIR%" "%RUN_ERR%" "%TMP_OUT%"
+  )
 )
 call :append_file "%TMP_OUT%"
 exit /b 0
 
 :test_deploy_build_option
-call :section "TESTE: opcao 3 do deploy (build)"
+call :section "TESTE: opcao 3 do deploy"
 call :reset_tmp_out
 if not exist "%DEPLOY_BAT%" (
-  call :fail "Nao foi possivel testar build: deploy_mobile.bat ausente"
+  call :fail "Nao foi possivel testar opcao 3: deploy ausente"
   exit /b 0
 )
 call :run_deploy_input "3;teste-build-auto; ;8" 600 "%TMP_OUT%"
-if errorlevel 1 (
-  findstr /i "[ERRO]" "%TMP_OUT%" >nul 2>nul
-  if errorlevel 1 (call :fail "Opcao 3 falhou sem output de erro tratado") else (call :warn "Opcao 3 retornou erro tratado")
+if not "%RUN_ERR%"=="0" (
+  if /i "%RUN_CLASS%"=="erro tratado" (
+    call :warn "Opcao 3 retornou erro tratado"
+  ) else (
+    call :fail "Opcao 3 falhou"
+    call :record_failure_context "opcao 3" "deploy_mobile.bat (input: 3;teste-build-auto; ;8)" "%SCRIPT_DIR%" "%RUN_ERR%" "%TMP_OUT%"
+  )
 )
-call :append_file "%TMP_OUT%"
 
 findstr /R /I /C:"Link da build: https\?://" "%TMP_OUT%" >nul 2>nul
 if not errorlevel 1 (
@@ -246,21 +266,23 @@ if not errorlevel 1 (
 ) else (
   findstr /i "https://api.qrserver.com/v1/create-qr-code/" "%TMP_OUT%" >nul 2>nul
   if not errorlevel 1 (
-    call :pass "Opcao 3 mostrou URL de QR Code"
+    call :pass "Opcao 3 mostrou QR URL"
   ) else (
     findstr /i "Build executado, mas nao foi possivel extrair link automaticamente" "%TMP_OUT%" >nul 2>nul
     if not errorlevel 1 (
-      call :warn "Opcao 3 usou fallback por nao extrair link automaticamente"
+      call :warn "Opcao 3 com fallback de extracao"
     ) else (
       findstr /i "eas build:list -p android --limit 1" "%TMP_OUT%" >nul 2>nul
       if not errorlevel 1 (
-        call :warn "Opcao 3 mostrou fallback manual para localizar a build"
+        call :warn "Opcao 3 mostrou fallback manual"
       ) else (
-        call :fail "Opcao 3 sem link/QR/fallback e sem erro tratado"
+        call :fail "Opcao 3 sem link/QR/fallback"
+        call :record_failure_context "opcao 3" "deploy_mobile.bat (input: 3;teste-build-auto; ;8)" "%SCRIPT_DIR%" "%RUN_ERR%" "%TMP_OUT%"
       )
     )
   )
 )
+call :append_file "%TMP_OUT%"
 exit /b 0
 
 :test_deploy_log_exists
@@ -277,6 +299,8 @@ exit /b 0
 set "RUN_INPUT=%~1"
 set "RUN_TIMEOUT=%~2"
 set "RUN_OUT=%~3"
+set "RUN_ERR=0"
+set "RUN_CLASS="
 if exist "%RUN_OUT%" del /f /q "%RUN_OUT%" >nul 2>nul
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
@@ -309,6 +333,7 @@ if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
 set "RUN_ERR=%ERRORLEVEL%"
+call :classify_run_result "%RUN_OUT%" "%RUN_ERR%"
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 exit /b %RUN_ERR%
 
@@ -316,6 +341,8 @@ exit /b %RUN_ERR%
 set "RUN_CMD=%~1"
 set "RUN_TIMEOUT=%~2"
 set "RUN_OUT=%~3"
+set "RUN_ERR=0"
+set "RUN_CLASS="
 if exist "%RUN_OUT%" del /f /q "%RUN_OUT%" >nul 2>nul
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
@@ -344,8 +371,34 @@ if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
 set "RUN_ERR=%ERRORLEVEL%"
+call :classify_run_result "%RUN_OUT%" "%RUN_ERR%"
 if exist "%TMP_PS1%" del /f /q "%TMP_PS1%" >nul 2>nul
 exit /b %RUN_ERR%
+
+:classify_run_result
+set "CR_OUT=%~1"
+set "CR_ERR=%~2"
+set "RUN_CLASS="
+if "%CR_ERR%"=="124" (set "RUN_CLASS=timeout" & exit /b 0)
+if "%CR_ERR%"=="0" (set "RUN_CLASS=sucesso" & exit /b 0)
+if exist "%CR_OUT%" (
+  findstr /i "[ERRO]" "%CR_OUT%" >nul 2>nul
+  if not errorlevel 1 (set "RUN_CLASS=erro tratado" & exit /b 0)
+  for %%Z in ("%CR_OUT%") do set "FS=%%~zZ"
+  if "!FS!"=="0" (set "RUN_CLASS=output vazio") else (set "RUN_CLASS=crash/erro nao tratado")
+) else (
+  set "RUN_CLASS=output vazio"
+)
+exit /b 0
+
+:record_failure_context
+call :write_line "[FORENSE] Contexto da falha: %~1"
+call :write_line "Diretorio de execucao: %~3"
+call :write_line "Comando executado: %~2"
+call :write_line "Exit code: %~4"
+if defined RUN_CLASS call :write_line "Classificacao: %RUN_CLASS%"
+if exist "%~5" call :append_file "%~5"
+exit /b 0
 
 :section
 set "SEC=%~1"

@@ -199,3 +199,11 @@ O testador foi alinhado ao menu atual do `deploy_mobile.bat` (1..8), incluindo v
 - análise estática de labels e chaves atuais do deploy.
 
 Também registra no relatório o diretório real de execução do `expo export` e usa `%APP_DIR%` para comandos Expo/EAS.
+
+
+### Relatório forense do testador
+
+O `test_deploy.bat` foi ajustado para depuração forense em falhas dinâmicas:
+- sempre anexa saída capturada em falhas de `expo export`, menu, opção 1, opção 2 e opção 3;
+- registra diretório, comando e exit code no relatório;
+- classifica falhas em `timeout`, `erro tratado`, `crash/erro nao tratado` ou `output vazio`.

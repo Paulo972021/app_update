@@ -1,0 +1,9 @@
+.expo/
+dist/
+node_modules/
+deploy_mobile.log
+test_deploy_report.txt
+test_deploy_tmp_output.txt
+.eas_build_result.json
+!LOG_FILE!
+]
