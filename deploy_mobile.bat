@@ -200,33 +200,25 @@ if errorlevel 1 exit /b 1
 exit /b 0
 
 :run_and_log
-set "STEP=%~1"
+set "STEP_NAME=%~1"
 shift
-set "TMP_OUT=%TEMP%\deploy_mobile_cmd_output_%RANDOM%_%RANDOM%.log"
 
-echo.
-echo [EXEC] %STEP%
+echo ===== %date% %time% | %STEP_NAME% ===== >> "%LOG_FILE%"
 echo [EXEC] %* >> "%LOG_FILE%"
-echo ===== %date% %time% | %STEP% ===== >> "%LOG_FILE%"
 
-call %* > "%TMP_OUT%" 2>&1
-set "CMD_RC=%ERRORLEVEL%"
+call %* >> "%LOG_FILE%" 2>&1
+set "CMD_ERR=%ERRORLEVEL%"
 
-if exist "%TMP_OUT%" (
-  type "%TMP_OUT%"
-  type "%TMP_OUT%" >> "%LOG_FILE%"
-  del /f /q "%TMP_OUT%" >nul 2>nul
+echo ----- exit code: %CMD_ERR% ----- >> "%LOG_FILE%"
+
+if not "%CMD_ERR%"=="0" (
+  echo.
+  echo [ERRO] %STEP_NAME% falhou.
+  echo Veja o log: %LOG_FILE%
+  exit /b %CMD_ERR%
 )
 
-echo ----- exit code: %CMD_RC% ----- >> "%LOG_FILE%"
-if not "%CMD_RC%"=="0" (
-  set "LAST_ERROR=%CMD_RC%"
-  exit /b %CMD_RC%
-)
-
-echo [OK] %STEP%
 exit /b 0
-
 :handle_error
 echo.
 echo ==============================
